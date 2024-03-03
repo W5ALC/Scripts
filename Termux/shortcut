@@ -1,0 +1,291 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+SHORTCUTS_DIR="$HOME/.shortcuts"
+BIN_DIR="$HOME/bin"
+
+# Check if directories exist
+mkdir -p "$SHORTCUTS_DIR" "$BIN_DIR"
+
+# Function to display the menu
+function display_menu {
+  printf "\nSelect an option:\n\n"
+  printf "1. Create a new shortcut\n"
+  printf "2. Copy a script from ~/bin to shortcuts\n"
+  printf "3. Modify an existing shortcut\n"
+  printf "4. Download script from url\n"
+  printf "5. Delete shortcuts\n"
+  printf "6. Push shortcut home\n"
+  printf "7. Pull shortcut from home\n"
+  printf "8. Bulk copy remote bin to shortcuts\n"
+  printf "9. Search shortcuts\n"
+  printf "10. Exit\n"
+}
+# Function to create a new shortcut
+function create_new_shortcut {
+  printf "Enter the name for your new shortcut:\n\n"
+  read -r shortcut_name
+  shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+
+  printf "#!/bin/bash\n\n" > "$shortcut_path"
+  $EDITOR "$shortcut_path"
+  chmod +x "$shortcut_path"
+
+  printf "Shortcut created at $shortcut_path\n\n"
+}
+
+# Function to create a new barebones shortcut
+function create_barebones_shortcut {
+    printf "Enter the name for your new shortcut:\n\n"
+    read -r shortcut_name
+    shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+
+    cat <<EOF > "$shortcut_path"
+#!/bin/bash
+# Usage: $shortcut_name
+#
+# Main code here
+
+# Stops execution if any command fails.
+set -eo pipefail
+
+function cleanup() {
+    # Remove temporary files
+    # Restart services
+    # ...
+    printf "\n"
+}
+
+function main() {
+    if [[ "\$1" == "--help" ]]; then
+        usage
+    else
+        # Some Code Here
+        printf "Some code here\\n"
+    fi
+}
+
+function usage() {
+    printf "Usage: %s [options]\\n" "\$0"
+    printf "Options:\\n"
+    # Add your options here
+}
+
+#trap command makes sure the cleanup function runs to clean up any miscreations by the script
+trap cleanup EXIT
+
+main "\$@"
+EOF
+
+    chmod +x "$shortcut_path"
+    printf "Barebones shortcut created: %s\n\n" "$shortcut_path"
+}
+
+
+# Function to copy a script from ~/bin to ~/.shortcuts
+function copy_to_shortcuts() {
+  printf "Select a script to copy to shortcuts:\n"
+
+  select script_name in $(ls $BIN_DIR); do
+    script_path="$BIN_DIR/$script_name"
+    if [[ -z "$script_name" ]]; then
+      printf "Invalid choice.\n"
+      exit 1
+    elif [[ ! -f "$script_path" ]]; then
+      printf "Selection is not a script.\n"
+      exit 1
+    else
+      shortcut_path="$SHORTCUTS_DIR/$script_name"
+
+      if [[ -f "$shortcut_path" ]]; then
+        printf "Shortcut already exists: $shortcut_path\n"
+        exit 1
+      fi
+
+      cp "$script_path" "$shortcut_path"
+      printf "Script copied to shortcuts: $shortcut_path\n"
+      exit 0
+    fi
+  done
+}
+
+# Function to modify an existing shortcut
+function modify_existing_shortcut {
+  printf "Select a shortcut to modify:\n\n"
+
+  select shortcut_name in $(ls $SHORTCUTS_DIR); do
+    if [ -n "$shortcut_name" ]; then
+      shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+      printf "Editing shortcut $shortcut_path\n\n"
+      nano "$shortcut_path"
+      return
+    fi
+  done
+}
+
+# Download a script from a URL and save it to ~/.shortcuts
+function download_script_to_shortcuts {
+  printf "Enter the URL of the script you want to download and save to shortcuts:\n\n"
+  read -r url
+
+  printf "Enter the name for the new shortcut:\n\n"
+  read -r shortcut_name
+  shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+
+  curl -o "$shortcut_path" "$url"
+  chmod +x "$shortcut_path"
+
+  printf "Script downloaded from $url and saved to shortcut $shortcut_path\n\n"
+}
+
+# Function to list and delete shortcuts
+function list_and_delete_shortcuts {
+  printf "Select a shortcut to delete:\n\n"
+
+  select shortcut_name in $(ls -p $SHORTCUTS_DIR | grep -v "/"); do
+    if [ -n "$shortcut_name" ]; then
+      shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+      printf "Are you sure you want to delete the shortcut $shortcut_name? (y/n)\n"
+      read -r -n 1 confirm
+      if [ "$confirm" == "y" ]; then
+	printf "\n"
+        rm "$shortcut_path"
+        printf "\nShortcut deleted: $shortcut_path\n\n"
+      else
+        printf "Shortcut not deleted: $shortcut_path\n\n"
+      fi
+      return
+    fi
+  done
+}
+
+function send_shortcut_to_home {
+  printf "Select a shortcut to send to the home folder on the remote host:\n\n"
+
+  select shortcut_name in $(ls -p $SHORTCUTS_DIR | grep -v '/'); do
+    if [ -n "$shortcut_name" ]; then
+      shortcut_path="$SHORTCUTS_DIR/$shortcut_name"
+      printf "Sending shortcut $shortcut_path to the remote host...\n\n"
+      rsync -avz -e ssh "$shortcut_path" home:~
+      printf "Shortcut sent successfully\n\n"
+      return
+    fi
+  done
+}
+
+function copy_remote_bin_to_shortcuts {
+  printf "Fetching file list from the remote host's bin folder...\n\n"
+  remote_bin_files=$(ssh home 'ls -p ~/ ~/bin | grep -v "/"')
+
+  if [ -z "$remote_bin_files" ]; then
+    printf "No files found in the remote bin folder.\n\n"
+    return
+  fi
+
+  printf "Select a file from the remote host's bin folder to copy to shortcuts:\n\n"
+
+  select remote_file in $remote_bin_files; do
+    if [ -n "$remote_file" ]; then
+      remote_path="home:~/$remote_file"
+      local_shortcut_path="$SHORTCUTS_DIR/$remote_file"
+
+      if [ -f "$local_shortcut_path" ]; then
+        printf "Shortcut already exists: $local_shortcut_path\n"
+        printf "Do you want to overwrite? (y/n)\n"
+        read -r -n 1 overwrite_choice
+
+        if [[ "$overwrite_choice" != "y" ]]; then
+          printf "Operation canceled.\n"
+          return
+        fi
+      fi
+
+      printf "Copying file $remote_path to shortcuts...\n\n"
+      rsync -avz -e ssh "$remote_path" "$local_shortcut_path"
+      printf "File copied successfully to shortcuts: $local_shortcut_path\n\n"
+      return
+    fi
+  done
+}
+
+function search_shortcuts {
+  printf "Enter a keyword to search for in shortcut names and content:\n\n"
+  read -r keyword
+
+  if [ -z "$keyword" ]; then
+    printf "No keyword provided. Exiting...\n\n"
+    return
+  fi
+
+  printf "Searching for shortcuts containing '%s' in their name or content...\n\n" "$keyword"
+
+  name_matches=$(find "$SHORTCUTS_DIR" -type f -iname "*$keyword*")
+  content_matches=$(grep -rIl "$keyword" "$SHORTCUTS_DIR")
+
+  if [ -z "$name_matches" ] && [ -z "$content_matches" ]; then
+    printf "No shortcuts found matching the keyword '%s'.\n\n" "$keyword"
+  else
+    printf "Shortcuts with names containing '%s':\n\n" "$keyword"
+    printf "%s\n" "$name_matches"
+
+    printf "\nShortcuts with content containing '%s':\n\n" "$keyword"
+    printf "%s\n" "$content_matches"
+  fi
+}
+
+function bulk_copy_remote_bin_to_shortcuts {
+  printf "Fetching file list from the remote host's bin folder...\n\n"
+  remote_bin_files=$(ssh home 'cd ~/bin; ls')
+
+  if [ -z "$remote_bin_files" ]; then
+    printf "No files found in the remote bin folder.\n\n"
+    return
+  fi
+
+  printf "Select files from the remote host's bin folder to copy to shortcuts (separated by spaces):\n\n"
+  printf "%s\n" $remote_bin_files
+  read -ra selected_files
+
+  if [ ${#selected_files[@]} -eq 0 ]; then
+    printf "No files selected. Exiting...\n\n"
+    return
+  fi
+
+  for remote_file in "${selected_files[@]}"; do
+    remote_path="home:~/bin/$remote_file"
+    local_shortcut_path="$SHORTCUTS_DIR/$remote_file"
+
+    if [ -f "$local_shortcut_path" ]; then
+      printf "Shortcut already exists: $local_shortcut_path\n"
+      printf "Do you want to overwrite the existing shortcut? (yes/no)\n"
+      read -r overwrite_choice
+
+      if [[ "$overwrite_choice" != "yes" ]]; then
+        printf "Skipping %s...\n" "$remote_file"
+        continue
+      fi
+    fi
+
+    printf "Copying file %s to shortcuts...\n" "$remote_file"
+    rsync -avz -e ssh "$remote_path" "$local_shortcut_path"
+    printf "File copied successfully to shortcuts: %s\n\n" "$local_shortcut_path"
+  done
+}
+
+while true; do
+  display_menu
+  read -r option
+
+  case $option in
+    1) create_barebones_shortcut;;
+    2) copy_to_shortcuts;;
+    3) modify_existing_shortcut;;
+    4) download_script_to_shortcuts;;
+    5) list_and_delete_shortcuts;;
+    6) send_shortcut_to_home;;
+    7) copy_remote_bin_to_shortcuts;;
+    8) bulk_copy_remote_bin_to_shortcuts;;
+    9) search_shortcuts;;
+    10) printf "Goodbye!\n"; exit 0;;
+    *) printf "Invalid option\n";;
+  esac
+done

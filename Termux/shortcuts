@@ -1,0 +1,23 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+shortcuts_folder="$HOME/.shortcuts"
+
+# Check if the shortcuts folder exists
+if [ ! -d "$shortcuts_folder" ]; then
+    echo "Shortcuts folder not found. Please create the folder and add your scripts."
+    exit 1
+fi
+
+# List available scripts (excluding folders) and use fzf for interactive selection
+selected_script=$(find "$shortcuts_folder" -maxdepth 1 -type f | sort --reverse | fzf --prompt="Select script: ")
+
+# Check if a script was selected
+if [ -z "$selected_script" ]; then
+    echo "No script selected. Exiting."
+    exit 1
+fi
+
+# Run the selected script
+printf "Running script: %s\n" "$selected_script"
+bash "$selected_script"
+

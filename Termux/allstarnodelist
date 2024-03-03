@@ -1,0 +1,16 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+# Set variables
+URL="http://stats.allstarlink.org/stats/keyed"
+SLEEP_INTERVAL=180
+
+# Main loop
+while true; do
+    clear
+    # Fetch and process data from the URL
+    lynx_output=$(lynx --dump "$URL" | awk '/AllStarLink Keyed Nodes/,/©/{if (/Node Chart Callsign Frequency CTCSS Location Connected Nodes/) next; print $1, $2, $3, $4, $5, $6}' | sed -n '/AllStarLink\ Keyed\ Nodes/,$p' | sed -n '/©/q;p' | sed 's/\[[^]]*\]//g' | sed 's|Bubble ||g')
+    # Format and display the output using printf
+     printf "%s\n" "$lynx_output"
+    sleep "$SLEEP_INTERVAL"
+done
+

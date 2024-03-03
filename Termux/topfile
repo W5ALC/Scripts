@@ -1,0 +1,9 @@
+#!/bin/bash
+set -x
+
+# Replace 'your_remote_host' with the appropriate host from your .ssh/config file
+REMOTE_HOST="area-51"
+
+# SSH into the remote host and execute the find command
+#ssh $REMOTE_HOST "find /media/nowhereman/nowhereman -type f -exec du -h {} + 2>/dev/null | sort -rh | head -n 200 | sed 's|\/media\/nowhereman\/nowhereman|.|g' > ~/hdd-file-list.txt"
+ssh $REMOTE_HOST "find /home/nowhereman/ -type f -exec du -h {} + 2>/dev/null | sort -rh | head -n 200 | sed 's|\/home\/nowhereman|.|g' > ~/hdd-file-list.txt"

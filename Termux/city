@@ -1,0 +1,23 @@
+#!/bin/bash
+#set -x
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+# Function to handle SIGINT signal and exit gracefully
+function handle_sigint {
+    printf "\nExiting...\n"
+    exit 0
+}
+
+trap handle_sigint SIGINT
+
+while true; do
+# Prompt user to enter latitude and longitude
+read -r -p "Enter the latitude: " lat
+read -r -p "Enter the longitude: " long
+
+# Make an API request to Nominatim to get the nearest city
+response=$(curl -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$long&zoom=10&addressdetails=1&accept-language=en")
+
+# Parse the response to get the name of the nearest county (if in USA, Canada, or Mexico) or country (otherwise)
+display_name=$(echo $response | grep -oP '(?<="display_name":")[^"]*')
+    printf "\nThis is in: %s\n\n" "$display_name"
+done

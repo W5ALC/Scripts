@@ -1,0 +1,3 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+ssh allstarlink "/usr/local/sbin/node-disconnect"

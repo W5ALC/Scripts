@@ -1,0 +1,39 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+ryt() {
+     cleanup() {
+         printf "\nInterrupted. Exiting...\n"
+         exit 1
+     }
+
+     trap cleanup INT
+
+     if [ -f "$1" ]; then
+         pv -qL $[11+(-1 + RANDOM%5)] < "$1"
+     else
+         printf '%s\n' "$@" | pv -qL $[11+(-1 + RANDOM%5)];
+     fi
+
+     trap - INT  # Remove the trap after execution
+     printf "\n"
+}
+
+clear
+sleep 2
+ryt "Wake up, Neo..."
+sleep 5
+clear
+sleep 2
+ryt "The Matrix has you..."
+sleep 5
+clear
+sleep 2
+ryt "Follow the white rabbit."
+sleep 5
+clear
+sleep 2
+ryt "Knock, knock, Neo."
+sleep 5
+clear
+sleep 2
+exit 0

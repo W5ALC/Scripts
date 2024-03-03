@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# Function to list remote hosts defined in SSH config
+get_remote_hosts() {
+    grep -iw host ~/.ssh/config | grep -v "exec" | awk '{print $2}'
+}
+
+# Function to execute commands on the selected remote host via SSH
+execute_remote_command() {
+    local selected_host="$1"
+    shift
+    ssh $selected_host "$@"
+}
+
+# Function to determine the package manager of the remote system
+get_package_manager() {
+    local selected_host="$1"
+    local pm
+    case "$(execute_remote_command "$selected_host" "uname -s")" in
+        "Linux")
+            if execute_remote_command "$selected_host" "command -v apt-get &>/dev/null"; then
+                pm="apt"
+            elif execute_remote_command "$selected_host" "command -v pacman &>/dev/null"; then
+                pm="pacman"
+            elif execute_remote_command "$selected_host" "command -v dnf &>/dev/null"; then
+                pm="dnf"
+            elif execute_remote_command "$selected_host" "command -v zypper &>/dev/null"; then
+                pm="zypper"
+            else
+                echo "Error: No supported package manager found on the remote system."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Error: Unsupported operating system on the remote system."
+            exit 1
+            ;;
+    esac
+    echo "$pm"
+}
+
+# Function to install packages on the remote system
+install_package() {
+    local selected_host="$1"
+    local pm="$2"
+    execute_remote_command "$selected_host" "sudo $pm install \"$3\""
+}
+
+# Function to remove packages on the remote system
+remove_package() {
+    local selected_host="$1"
+    local pm="$2"
+    execute_remote_command "$selected_host" "sudo $pm remove \"$3\""
+}
+
+# Function to search for packages on the remote system
+search_package() {
+    local selected_host="$1"
+    local pm="$2"
+    case $pm in
+        "apt")
+            execute_remote_command "$selected_host" "apt search \"$3\""
+            ;;
+        "pacman")
+            execute_remote_command "$selected_host" "pacman -Ss \"$3\""
+            ;;
+        "dnf")
+            execute_remote_command "$selected_host" "dnf search \"$3\""
+            ;;
+        "zypper")
+            execute_remote_command "$selected_host" "zypper search \"$3\""
+            ;;
+    esac
+}
+
+# Function to update packages on the remote system
+update_packages() {
+    local selected_host="$1"
+    local pm="$2"
+    execute_remote_command "$selected_host" "sudo $pm update"
+}
+
+# Main menu function
+main_menu() {
+    PS3="Select a remote host to connect to: "
+    select host in $(get_remote_hosts); do
+        if [[ -n "$host" ]]; then
+            local pm=$(get_package_manager "$host")
+            PS3="Select an action: "
+            select action in "Install Package" "Remove Package" "Search Package" "Update Packages" "Exit"; do
+                case $action in
+                    "Install Package")
+                        read -p "Enter package name: " package
+                        install_package "$host" "$pm" "$package"
+                        exit 0
+                        ;;
+                    "Remove Package")
+                        read -p "Enter package name: " package
+                        remove_package "$host" "$pm" "$package"
+                        exit 0
+                        ;;
+                    "Search Package")
+                        read -p "Enter search query: " query
+                        search_package "$host" "$pm" "$query"
+                        exit 0
+                        ;;
+                    "Update Packages")
+                        update_packages "$host" "$pm"
+                        exit 0
+                        ;;
+                    "Exit")
+                        echo "Exiting..."
+                        exit 0
+                        ;;
+                    *)
+                        echo "Invalid option. Please select again."
+                        ;;
+                esac
+            done
+        else
+            echo "Invalid option. Please select again."
+        fi
+    done
+}
+
+# Main script
+main_menu

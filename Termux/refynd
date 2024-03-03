@@ -1,0 +1,113 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+function get-remote-hosts {
+    grep -iw host ~/.ssh/config | grep -v "exec" | cut -d ' ' -f 2
+}
+
+function backup-files {
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        printf "Select an option:\n"
+        select option in "Push files to remote directory" "Pull files from remote directory" "Exit" ; do
+            case "$option" in
+                "Push files to remote directory")
+                    if command -v fzf >/dev/null 2>&1; then
+                         FZF_DEFAULT_COMMAND='find "$HOME"/ /sdcard/ -maxdepth 2 -type f | grep -iv music | sort -f'
+                         local_source_dir=$(eval "$FZF_DEFAULT_COMMAND" | sort -f | fzf --bind 'ctrl-d:reload(find "$HOME"/ /sdcard/ -maxdepth 1 -type d | sort -f),ctrl-f:reload(find "$HOME"/ /sdcard/ -maxdepth 2 -type f | grep -iv music | sort -f)' --layout=reverse --reverse)
+			 #local_source_dir=$(echo "$local_source_dir" | sed 's|\\#012|\n|g')
+                    else
+                        local_source_dir=$(dialog --stdout --title "Select a directory" --dselect "$HOME/" 14 48)
+                    fi
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select local directory\n"
+                        return 1
+                    fi
+
+                    temp_file=$(mktemp)
+                    ssh "$remote_host" 'find $HOME/ /media/nowhereman/nowhereman/ -maxdepth 1 -type d | sort -f' | sort -f > "$temp_file"
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        remote_dest_dir=$(cat "$temp_file" | fzf --reverse)
+                    else
+                        remote_dest_dir=$(dialog --stdout --title "Select a remote directory" --fselect "$temp_file" 14 48)
+                    fi
+
+                    rm "$temp_file"
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select remote directory\n"
+                        return 1
+                    fi
+                    if rsync -avz --progress "$local_source_dir" "$remote_host":"$remote_dest_dir"; then
+                        printf "Files pushed successfully\n"
+                    else
+                        printf "Error: Failed to push files\n"
+                        return 1
+                    fi
+                    break
+                    ;;
+
+                "Pull files from remote directory")
+                    temp_file=$(mktemp)
+                    ssh "$remote_host" 'find $HOME/ /media/nowhereman/nowhereman  -maxdepth 1 -type f' | sort -f > "$temp_file"
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        remote_source_dir=$(cat "$temp_file" | grep -iv pictures | fzf --reverse)
+                    else
+                        remote_source_dir=$(dialog --stdout --title "Select a remote directory" --fselect "$temp_file" 14 48)
+                    fi
+
+                    rm "$temp_file"
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select remote directory\n"
+                        return 1
+                    fi
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        local_dest_dir=$(find "$HOME"/ /sdcard/ -maxdepth 1 -type d | sort -f | fzf --reverse)
+                    else
+                        local_dest_dir=$(dialog --stdout --title "Select a directory" --dselect "$HOME/" 14 48)
+                    fi
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select local directory\n"
+                        return 1
+                    fi
+
+                    if rsync -avz --progress "$remote_host":"$remote_source_dir" "$local_dest_dir"; then
+                        printf "Files pulled successfully\n"
+                    else
+                        printf "Error: Failed to pull files\n"
+                        return 1
+                    fi
+                    break
+                    ;;
+		"Exit")
+		    break
+		    ;;
+                *)
+                    printf "Invalid option. Please select a valid option.\n"
+                    ;;
+            esac
+        done
+        break
+    done
+}
+
+PS3="𝝅) "
+
+# Execute the backup-files function
+backup-files

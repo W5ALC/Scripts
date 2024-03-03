@@ -1,0 +1,85 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+
+# Function to display program information and get current coordinates
+function show_info_and_get_current_coordinates {
+    cat <<EOF
+This script allows you to find the location based on coordinates.
+You can input coordinates in either decimal or DMS format.
+
+#To  find the current location, press 'Ctrl+C' during coordinate input.
+
+EOF
+
+    # Get current coordinates using termux-location
+    current_coordinates=$(termux-location)
+
+    # Extract latitude and longitude from the output
+    current_latitude=$(echo "$current_coordinates" | jq -r '.latitude')
+    current_longitude=$(echo "$current_coordinates" | jq -r '.longitude')
+
+#    echo "Current coordinates: Latitude $current_latitude, Longitude $current_longitude"
+#    echo "-----------------------------------------------"
+
+    # Display current location as if entered manually
+    response=$(curl -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$current_latitude&lon=$current_longitude&zoom=10&addressdetails=1&accept-language=en")
+
+    # Parse the response to get the name of the nearest county (if in USA, Canada, or Mexico) or country (otherwise)
+    display_name=$(echo $response | grep -oP '(?<="display_name":")[^"]*')
+    printf "\nCurrent location: %s\n\n" "$display_name"
+}
+
+function handle_sigint {
+    printf "\nExiting...\n"
+    exit 0
+}
+
+trap handle_sigint SIGINT
+
+# Display program information and get current coordinates
+show_info_and_get_current_coordinates
+
+while true; do
+    # Prompt user to enter latitude
+    read -r -p "Enter latitude (decimal or DMS): " lat_input
+
+    # Check if the input contains spaces, indicating DMS format
+    if [[ $lat_input == *" "* ]]; then
+        # Extract degrees, minutes, seconds
+        IFS=' ' read -r lat_deg lat_min lat_sec <<< "$lat_input"
+
+        # Convert DMS to decimal format
+        lat=$(awk "BEGIN {print $lat_deg + ($lat_min / 60) + ($lat_sec / 3600)}")
+    else
+        # Assume input is already in decimal format
+        lat=$lat_input
+    fi
+
+    # Prompt user to enter longitude
+    read -r -p "Enter longitude (decimal or DMS): " long_input
+
+    # Check if the input contains spaces, indicating DMS format
+    if [[ $long_input == *" "* ]]; then
+        # Extract degrees, minutes, seconds
+        IFS=' ' read -r long_deg long_min long_sec <<< "$long_input"
+
+        # Convert DMS to decimal format
+        long=$(awk "BEGIN {print $long_deg + ($long_min / 60) + ($long_sec / 3600)}")
+    else
+        # Assume input is already in decimal format
+        long=$long_input
+    fi
+
+    # Make an API request to Nominatim to get the nearest city
+    response=$(curl -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$long&zoom=10&addressdetails=1&accept-language=en")
+
+    # Parse the response to get the name of the nearest county (if in USA, Canada, or Mexico) or country (otherwise)
+    display_name=$(echo $response | grep -oP '(?<="display_name":")[^"]*')
+	if [ -z "$display_name" ]; then
+            printf "\nThis is in: The Ocean or a body of water\n\n"
+        else
+            printf "\nThis is in: %s\n\n" "$display_name"
+        fi
+done
+
+

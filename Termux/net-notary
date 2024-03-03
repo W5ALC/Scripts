@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ssh -t -p 222 root@10.0.0.173 "/usr/local/sbin/net-notary"

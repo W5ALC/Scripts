@@ -1,0 +1,57 @@
+#!/bin/bash
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+
+# Function to connect to AllstarLink
+connect_allstarlink() {
+    printf "\nConnect/Disconnect Analog Bridge to AllstarLink...\n"
+    ssh allstarlink "/usr/local/sbin/connect-1027"
+}
+
+dmr-admin() {
+    printf "\nRunning DMR admin manager...\n"
+    ssh allstarlink "/usr/local/sbin/dvselect"
+}
+# Function to disconnect node
+disconnect_node() {
+    printf "\nDisconnecting all external nodes...\n"
+    ssh allstarlink "/usr/local/sbin/node-disconnect"
+}
+
+# Function to perform nconect
+perform_nconect() {
+    printf "\nRunning node connection manager\n"
+    ssh allstarlink "/usr/local/sbin/nconect"
+}
+
+# Function to run net-notary
+run_net_notary() {
+    printf "\nRunning net-notary...\n"
+    ssh allstarlink "/usr/local/sbin/net-notary"
+}
+
+# Main menu loop
+while true; do
+    # Display menu
+    printf "Select an option:\n"
+    printf "1. Connect/Disconnect Analog Bridge to AllstarLink...\n"
+    printf "2. Running DMR admin manager...\n"
+    printf "3. Disconnect all external nodes\n"
+    printf "4. Running node connection manager\n"
+    printf "5. Run net-notary\n"
+    printf "6. Exit\n"
+
+    # Read user input
+    read -r -n 1 -p "Enter your choice (1-6): " choice
+
+    # Execute selected option
+    case $choice in
+        1) connect_allstarlink ;;
+	2) dmr-admin ;;
+        3) disconnect_node ;;
+        4) perform_nconect ;;
+        5) run_net_notary ;;
+        6) printf "Exiting. Goodbye!\n"; exit ;;
+        *) printf "Invalid choice\n" ;;
+    esac
+done
+

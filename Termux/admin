@@ -1,1 +1,512 @@
-placeholder
+#!/data/data/com.termux/files/usr/bin/bash
+# set -x
+# Define menu options
+export SHELL=/data/data/com.termux/files/usr/bin/bash
+set +o vi
+OPTIONS=(
+    "Remote Linux Terminal"
+    "Package Manager"
+    "Monitor System Logs"
+    "Backup Important Files"
+    "Adjust Sound with Alsamixer"
+    "Run youtube-toggle on area-51"
+    "Run sat.sh on area-51"
+    "Reboot or Shutdown Remote System"
+    "Help"
+    "Exit"
+)
+
+# Define function to fetch list of remote hosts from ssh config
+function get-remote-hosts {
+    grep -iw host ~/.ssh/config | grep -v "exec" | cut -d ' ' -f 2
+}
+
+# Function to execute commands on the selected remote host via SSH
+execute_remote_command() {
+    local selected_host="$1"
+    shift
+    ssh $selected_host "$@"
+}
+
+# Function to determine the package manager of the remote system
+get_package_manager() {
+    local selected_host="$1"
+    local pm
+    case "$(execute_remote_command "$selected_host" "uname -s")" in
+        "Linux")
+            if execute_remote_command "$selected_host" "command -v apt-get &>/dev/null"; then
+                pm="apt"
+            elif execute_remote_command "$selected_host" "command -v pacman &>/dev/null"; then
+                pm="pacman"
+            elif execute_remote_command "$selected_host" "command -v dnf &>/dev/null"; then
+                pm="dnf"
+            elif execute_remote_command "$selected_host" "command -v zypper &>/dev/null"; then
+                pm="zypper"
+            else
+                echo "Error: No supported package manager found on the remote system."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Error: Unsupported operating system on the remote system."
+            exit 1
+            ;;
+    esac
+    echo "$pm"
+}
+
+# Function to install packages on the remote system
+install_package() {
+    local selected_host="$1"
+    local pm="$2"
+    case $pm in
+        "apt")
+            execute_remote_command "$selected_host" "sudo apt install \"$3\""
+            ;;
+        "pacman")
+            execute_remote_command "$selected_host" "sudo pacman -S \"$3\""
+            ;;
+        "dnf")
+            execute_remote_command "$selected_host" "sudo dnf install \"$3\""
+            ;;
+        "zypper")
+            execute_remote_command "$selected_host" "sudo zypper install \"$3\""
+            ;;
+    esac
+}
+
+# Function to remove packages on the remote system
+remove_package() {
+    local selected_host="$1"
+    local pm="$2"
+    case $pm in
+        "apt")
+            execute_remote_command "$selected_host" "sudo apt remove \"$3\""
+            ;;
+        "pacman")
+            execute_remote_command "$selected_host" "sudo pacman -Rncs \"$3\""
+            ;;
+        "dnf")
+            execute_remote_command "$selected_host" "sudo dnf remove \"$3\""
+            ;;
+        "zypper")
+            execute_remote_command "$selected_host" "sudo zypper remove \"$3\""
+            ;;
+    esac
+}
+
+# Function to search for packages on the remote system
+search_package() {
+    local selected_host="$1"
+    local pm="$2"
+    case $pm in
+        "apt")
+            execute_remote_command "$selected_host" "apt search \"$3\""
+            ;;
+        "pacman")
+            execute_remote_command "$selected_host" "pacman -Ss \"$3\""
+            ;;
+        "dnf")
+            execute_remote_command "$selected_host" "dnf search \"$3\""
+            ;;
+        "zypper")
+            execute_remote_command "$selected_host" "zypper search \"$3\""
+            ;;
+    esac
+}
+
+# Function to update packages on the remote system
+update_packages() {
+    local selected_host="$1"
+    local pm="$2"
+    case $pm in
+        "apt")
+            execute_remote_command "$selected_host" "sudo apt update && sudo apt upgrade"
+            ;;
+        "pacman")
+            execute_remote_command "$selected_host" "sudo pacman -Syu"
+            ;;
+        "dnf")
+            execute_remote_command "$selected_host" "sudo dnf update"
+            ;;
+        "zypper")
+            execute_remote_command "$selected_host" "sudo zypper dup"
+            ;;
+    esac
+    execute_remote_command "$selected_host" "sudo $pm update"
+}
+
+# Main menu function
+main-menu-packman() {
+    PS3="Select a remote host to connect to: "
+    select host in $(get-remote-hosts); do
+        if [[ -n "$host" ]]; then
+            local pm=$(get_package_manager "$host")
+            PS3="Select an action: "
+            select action in "Install Package" "Remove Package" "Search Package" "Update Packages" "Exit"; do
+                case $action in
+                    "Install Package")
+                        read -p "Enter package name: " package
+                        install_package "$host" "$pm" "$package"
+                        break
+                        ;;
+                    "Remove Package")
+                        read -p "Enter package name: " package
+                        remove_package "$host" "$pm" "$package"
+                        break
+                        ;;
+                    "Search Package")
+                        read -p "Enter search query: " query
+                        search_package "$host" "$pm" "$query"
+                        break
+                        ;;
+                    "Update Packages")
+                        update_packages "$host" "$pm"
+                        break
+                        ;;
+                    "Exit")
+                        echo "Exiting..."
+                        break
+                        ;;
+                    *)
+                        echo "Invalid option. Please select again."
+                        ;;
+                esac
+            done
+	    break
+        else
+            echo "Invalid option. Please select again."
+        fi
+    done
+}
+
+# Define function for connecting to remote system
+function connect-to-remote-system {
+    # Fetch list of available remote hosts
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        ssh "$remote_host"
+        break
+    done
+}
+
+
+
+# Define function for monitoring system logs
+function monitor-logs {
+    # Fetch list of available remote hosts
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        printf "Select a log file to monitor or exit:\n"
+        select log_file in /var/log/messages /var/log/secure /var/log/httpd/access_log /var/log/httpd/error_log /var/log/mysqld.log /var/log/maillog /var/log/cron "Exit"; do
+            case "$log_file" in
+                "Exit")
+                    return
+                    ;;
+                *)
+                    ssh -t "$remote_host" "sudo tail -f $log_file"
+                    break
+                    ;;
+            esac
+        done
+    done
+}
+
+function backup-files {
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        printf "Select an option:\n"
+        select option in "Push files to remote directory" "Pull files from remote directory" "Exit" ; do
+            case "$option" in
+                "Push files to remote directory")
+                    if command -v fzf >/dev/null 2>&1; then
+                         FZF_DEFAULT_COMMAND='find "$HOME"/ /sdcard/ /sdcard/Download -maxdepth 2 -type f | grep -iv music | sort -f'
+                         local_source_dir=$(eval "$FZF_DEFAULT_COMMAND" | sort -f | fzf --bind 'ctrl-d:reload(find "$HOME"/ /sdcard/ -maxdepth 1 -type d | sort -f),ctrl-f:reload(find "$HOME"/ /sdcard/ -maxdepth 2 -type f | grep -iv music | sort -f)' --layout=reverse --reverse)
+                         #local_source_dir=$(echo "$local_source_dir" | sed 's|\\#012|\n|g')
+                    else
+                        local_source_dir=$(dialog --stdout --title "Select a directory" --dselect "$HOME/" 14 48)
+                    fi
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select local directory\n"
+                        return 1
+                    fi
+
+                    temp_file=$(mktemp)
+                    ssh "$remote_host" 'find $HOME/ /media/internal/ /media/nowhereman/nowhereman/ -maxdepth 1 -type d | sort -f' | sort -f > "$temp_file"
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        remote_dest_dir=$(cat "$temp_file" | fzf --reverse)
+                    else
+                        remote_dest_dir=$(dialog --stdout --title "Select a remote directory" --fselect "$temp_file" 14 48)
+                    fi
+
+                    rm "$temp_file"
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select remote directory\n"
+                        return 1
+                    fi
+                    if rsync -avz --progress "$local_source_dir" "$remote_host":"$remote_dest_dir"; then
+                        printf "Files pushed successfully\n"
+                    else
+                        printf "Error: Failed to push files\n"
+                        return 1
+                    fi
+                    break
+                    ;;
+
+                "Pull files from remote directory")
+                    temp_file=$(mktemp)
+                    ssh "$remote_host" 'find $HOME/ /media/internal/ /media/nowhereman/nowhereman  -maxdepth 1 -type f' | sort -f > "$temp_file"
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        remote_source_dir=$(cat "$temp_file" | grep -iv pictures | fzf --reverse)
+                    else
+                        remote_source_dir=$(dialog --stdout --title "Select a remote directory" --fselect "$temp_file" 14 48)
+                    fi
+
+                    rm "$temp_file"
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select remote directory\n"
+                        return 1
+                    fi
+
+                    if command -v fzf >/dev/null 2>&1; then
+                        local_dest_dir=$(find "$HOME"/ /sdcard/ -maxdepth 1 -type d | sort -f | fzf --reverse)
+                    else
+                        local_dest_dir=$(dialog --stdout --title "Select a directory" --dselect "$HOME/" 14 48)
+                    fi
+
+                    exit_status=$?
+                    if [ $exit_status -ne 0 ]; then
+                        printf "Error: Failed to select local directory\n"
+                        return 1
+                    fi
+
+                    if rsync -avz --progress "$remote_host":"$remote_source_dir" "$local_dest_dir"; then
+                        printf "Files pulled successfully\n"
+                    else
+                        printf "Error: Failed to pull files\n"
+                        return 1
+                    fi
+                    break
+                    ;;
+                "Exit")
+                    break
+                    ;;
+                *)
+                    printf "Invalid option. Please select a valid option.\n"
+                    ;;
+            esac
+        done
+        break
+    done
+}
+
+# Define function for adjusting sound with alsamixer on a remote system
+function adjust-sound {
+    # Fetch list of available remote hosts
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        printf "Adjusting sound with alsamixer on remote host %s. Press 'Esc' to exit.\n" "$remote_host"
+        ssh -t "$remote_host" "alsamixer"
+        break
+    done
+}
+
+# Define function for running youtube-toggle on area-51
+function run-youtube-toggle {
+    # Check if area-51 is in the list of remote hosts
+    if get-remote-hosts | grep -q '^area-51$'; then
+        printf "Running youtube-toggle script on area-51\n"
+        ssh "area-51" "youtube-toggle ; sleep 1 ; killall chrome ; sleep 1 ; systemd-run --user google-chrome youtube.com"
+    else
+        printf "Remote host 'area-51' not found in ~/.ssh/config\n"
+        return 1
+    fi
+}
+
+function run-sat-script {
+    # Check if area-51 is in the list of remote hosts                                                                                                      if get-remote-hosts | grep -q '^area-51$'; then
+    if get-remote-hosts | grep -q '^area-51$'; then
+        printf "Running sat.sh on area-51\n"
+        ssh "area-51" "sat.sh > /dev/null 2>&1 &"
+    else
+        printf "Remote host 'area-51' not found in ~/.ssh/config\n"
+        return 1
+    fi
+}
+
+# Define help function
+help_function() {
+    cat <<EOF
+This script provides various options to interact with remote Linux systems.
+
+Options:
+1. Remote Linux Terminal: Connect to a remote Linux system using SSH via hosts setup in .ssh/config.
+
+2. Package Manager: Manage packages on remote systems.
+
+    This option allows you to perform package management tasks on remote Linux systems. 
+    You can install, remove, search, and update packages using the supported package managers:
+    - For systems with apt package manager (e.g., Debian, Ubuntu): 'apt'
+    - For systems with dnf package manager (e.g., Fedora, CentOS): 'dnf'
+    - For systems with pacman package manager (e.g., Arch Linux): 'pacman'
+    - For systems with zypper package manager (e.g., openSUSE): 'zypper'
+
+3. Monitor system logs: View system logs on remote systems.
+
+4. Backup important files: Push/pull files to/from remote directories.
+
+    This option allows you to backup important files to or from remote directories. 
+    You can choose to push files from your local system to a remote directory or pull 
+    files from a remote directory to your local system. The script provides an interactive 
+    interface to select the source and destination directories for backup operations.
+
+5. Adjust sound with alsamixer: Control sound settings on a remote system.
+
+6. Run youtube-toggle on area-51:
+
+    This option runs the 'youtube-toggle' script on the specified remote host 'area-51'. 
+    The 'youtube-toggle' script is used to play YouTube videos on a remote system. 
+    It first stops any existing Chrome instances, then launches a new instance of Chrome 
+    to play the specified video. This option is useful for remotely playing YouTube videos 
+    on a designated system.
+
+7. Run sat.sh on area-51:
+
+    This script remotely fetches a satellite image, crops it,
+    adds a marker, sets it as wallpaper, and transfers it to
+    another machine at regular intervals. It ensures the display
+    always shows the latest image.
+
+8. Reboot or shutdown remote system: Reboot or shutdown a remote system.
+
+9. Help: Display this help message.
+
+10. Exit: Exit the script.
+
+EOF
+}
+
+
+# Define function for rebooting or shutting down a remote system
+function reboot_or_shutdown {
+    # Fetch list of available remote hosts
+    mapfile -t REMOTE_HOSTS < <(get-remote-hosts)
+
+    if [ ${#REMOTE_HOSTS[@]} -eq 0 ]; then
+        printf "No remote hosts found in ~/.ssh/config\n"
+        return 1
+    fi
+
+    printf "Select a remote host:\n"
+    select remote_host in "${REMOTE_HOSTS[@]}"; do
+        printf "Select an action for remote host %s:\n" "$remote_host"
+        select action in "Reboot" "Shutdown"; do
+            case "$action" in
+                "Reboot")
+                    printf "Rebooting %s...\n" "$remote_host"
+                    ssh "$remote_host" "sudo reboot"
+                    break
+                    ;;
+                "Shutdown")
+                    printf "Shutting down %s...\n" "$remote_host"
+                    ssh "$remote_host" "sudo poweroff"
+                    break
+                    ;;
+                *)
+                    printf "Invalid option. Please select a valid option.\n"
+                    ;;
+            esac
+        done
+        break
+    done
+}
+
+PS3="𝝅) "
+
+# Loop until user exits
+while true; do
+    # Display menu options
+    printf "Select an option:\n"
+    select option in "${OPTIONS[@]}"; do
+        case "$option" in
+            "Remote Linux Terminal")
+                connect-to-remote-system
+                break
+                ;;
+            "Package Manager")
+                main-menu-packman
+                break
+                ;;
+            "Monitor System Logs")
+                monitor-logs
+                break
+                ;;
+            "Backup Important Files")
+                backup-files
+                break
+                ;;
+            "Adjust sound with alsamixer")
+                adjust-sound
+                break
+                ;;
+            "Run youtube-toggle on area-51")
+                run-youtube-toggle
+                break
+                ;;
+	    "Run sat.sh on area-51")
+		run-sat-script
+                break
+		;;
+            "Reboot or Shutdown Remote System")
+                reboot_or_shutdown
+                break
+                ;;
+            "Help")
+                help_function
+                break
+                ;;
+            "Exit")
+                exit
+                ;;
+            *)
+                printf "Invalid option. Please select a valid option.\n"
+                ;;
+        esac
+    done
+done

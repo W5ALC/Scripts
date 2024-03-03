@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ssh allstarlink "/usr/local/sbin/connect-1027"
