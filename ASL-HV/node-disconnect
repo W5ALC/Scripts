@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Retrieve the NODE information from "rpt stats 49947" output
+NODE=$(asterisk -rx "rpt stats 49947" | grep "currently connected" | sed 's|1027||' | sed 's|W5ALC||' | sed 's|Linux-Home||' | sed 's|,||g' | awk '{print $NF}')
+
+# Check if NODE is not empty
+if [ -n "$NODE" ]; then
+    # Execute the desired command
+    asterisk -rx "rpt fun 49947 *1$NODE"
+else
+    echo "NODE information not found."
+fi
+

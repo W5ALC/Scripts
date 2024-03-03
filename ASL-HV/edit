@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# edit - Edit Configuration Files Script
+
+# Description:
+# This script provides a user-friendly way to edit various configuration files.
+# It allows users to select a configuration file from a list of options and
+# opens it for editing using the nano text editor. The script supports editing
+# configuration files located in "/etc/asterisk" and "/opt" directories.
+
+# Usage:
+#   ./edit
+#
+# Example:
+#   ./edit
+# 1) extensions     3) manager        5) Analog_Bridge  7) NXDNGateway
+# 2) iax            4) modules        6) MMDVM_Bridge
+# 
+# Select a configuration file to edit (or 0 to exit):
+# Function to edit configuration files
+edit_conf() {
+    while true; do
+        # List of available configuration files
+        local options=(
+            "extensions"
+            "iax"
+            "manager"
+            "modules"
+            "Analog_Bridge"
+            "MMDVM_Bridge"
+        )
+
+        # Add more configuration files here
+            options+=( "NXDNGateway" )
+
+        local num_options=${#options[@]}
+
+        # Prompt the user to select a configuration file
+        PS3="Select a configuration file to edit (or 0 to exit): "
+        select opt in "${options[@]}"; do
+            case $REPLY in
+                [0])
+                    printf "Exiting...\n"
+                    return 0
+                    ;;
+                [1-$num_options])
+                    local conf_file="/etc/asterisk/${opt}.conf"
+                    if [ -f "$conf_file" ]; then
+                        nano "$conf_file"
+                    else
+                        conf_file="/opt/${opt}/${opt}.ini"
+                        if [ -f "$conf_file" ]; then
+                            nano "$conf_file"
+                        else
+                            printf "Error: Configuration file '%s' not found.\n" "$opt"
+                            continue
+                        fi
+                    fi
+                    ;;
+                *)
+                    printf "Invalid option. Please select a number from 0 to %s.\n" "$num_options"
+                    ;;
+            esac
+            break
+        done
+    done
+}
+
+# Help message explaining script usage
+help_message() {
+    cat <<EOF
+Edit Configuration Files Script
+
+Description:
+  This script provides a user-friendly way to edit various configuration files.
+  It allows users to select a configuration file from a list of options and
+  opens it for editing using the nano text editor. The script supports editing
+  configuration files located in "/etc/asterisk" and "/opt" directories.
+
+Usage:
+  ./edit
+
+Example:
+  ./edit
+
+1) extensions     3) manager        5) Analog_Bridge  7) NXDNGateway
+2) iax            4) modules        6) MMDVM_Bridge
+Select a configuration file to edit (or 0 to exit):
+
+EOF
+}
+
+# If no arguments provided, display help message
+if [ "$#" -eq 1 ]; then
+    help_message
+    exit 1
+fi
+
+# Invoke edit_conf function
+edit_conf "$@"

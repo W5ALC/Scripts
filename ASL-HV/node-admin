@@ -1,0 +1,126 @@
+#!/bin/bash
+clear
+# connect node out
+function nconnect()
+{
+# Welcome Message
+printf "**********************************************\n"
+printf "   AllStarLink Node Connection Management\n"
+printf "**********************************************\n"
+printf "This allows you to seamlessly connect\n"
+printf "and disconnect AllStarLink nodes. Enter a node\n"
+printf "number to connect, press Enter to disconnect, and\n"
+printf "repeat. Type 'q' and press Enter to exit.\n"
+printf "**********************************************\n"
+
+while true; do
+    # Read input for AllStarLink node number
+    printf "Enter AllStarLink Node Number (or 'q' to quit): "
+    read -r node_number
+
+    # Check if 'q' was entered to quit the script
+    if [[ "$node_number" == "q" ]]; then
+        echo "Exiting the script."
+        break
+    fi
+
+    # Connect to the entered node
+    asterisk -rx "rpt fun 49947 *3$node_number"
+    printf "Connecting AllStarLink Node %s\n" "$node_number"
+
+    # Wait for user to press Enter to disconnect
+    printf "Press Enter to disconnect from Node $node_number..."
+    read -r
+
+    # Disconnect from the entered node
+    asterisk -rx "rpt fun 49947 *1$node_number"
+    printf "Disconnecting AllStarLink Node %s\n" "$node_number"
+done
+	
+}
+
+
+function connect1027()
+{
+
+# Define your AllStarLink node numbers
+MAIN_NODE=49947
+PRIVATE_NODE=1027
+
+# Function to check if node 1027 is currently connected to 49947
+is_connected() {
+    asterisk -rx "rpt stats $MAIN_NODE" | grep currently | sed 's|.*: ||' | grep -q "$PRIVATE_NODE"
+}
+
+# Function to connect node 1027 to 49947
+connect_nodes() {
+    asterisk -rx "rpt fun 49947 *31027"
+    printf "Connecting AllStarLink Node %s to Node %s\n" "$PRIVATE_NODE" "$MAIN_NODE"
+}
+
+# Function to disconnect node 1027 from 49947
+disconnect_nodes() {
+    asterisk -rx "rpt fun 49947 *11027"
+    printf "Disconnecting AllStarLink Node %s from Node %s\n" "$PRIVATE_NODE" "$MAIN_NODE"
+}
+
+# Check if node 1027 is connected and toggle the connection state
+if is_connected; then
+    disconnect_nodes
+else
+    connect_nodes
+fi
+}
+
+function ndisconnect()
+{
+# Retrieve the NODE information from "rpt stats 49947" output
+NODE=$(asterisk -rx "rpt stats 49947" | grep "currently connected" | sed 's|1027||' | sed 's|W5ALC||' | sed 's|Linux-Home||' | sed 's|,||g' | awk '{print $NF}')
+
+# Check if NODE is not empty
+if [ -n "$NODE" ]; then
+    # Execute the desired command
+    asterisk -rx "rpt fun 49947 *1$NODE"
+else
+    echo "NODE information not found."
+fi
+}
+
+# Main loop
+while true; do
+    # Display menu options
+printf "**********************************************\n"
+printf "   AllStarLink Node Connection Management\n"
+printf "**********************************************\n"
+printf "This script allows you to:\n"
+printf "1) Seamlessly connect and disconnect AllStarLink nodes.\n"
+printf "2) Connect DMR Bridge (1027)\n"
+printf "3) Disconnect any Connected node\n"
+printf "4) Press 4 to exit.\n"
+printf "**********************************************\n"
+    # Read user choice
+    printf "Enter your choice: "
+    read -r choice
+
+    # Perform action based on user choice
+    case $choice in
+                  1)
+            nconnect # Call the function to connect to a node
+            ;;
+        2)
+            connect1027 # Call the function to connect/disconnect node 1027
+            ;;
+        3)
+            ndisconnect # Call the function to disconnect from a node
+            ;;
+        4)
+            printf "Exiting the script.\n"
+            break # Exit the loop and end the script
+            ;;
+        *)
+            printf "Invalid choice. Please enter a valid option.\n"
+            ;;
+    esac
+done
+
+clear
